@@ -49,6 +49,9 @@ interface FetchAssetFileOptions {
   readonly repo: string
 }
 
+const MAX_RETRY = 5
+const RETRY_INTERVAL = 1000
+
 const fetchAssetFile = async (octokit: ReturnType<typeof github.getOctokit>, { id, outputPath, owner, repo }: FetchAssetFileOptions): Promise<void> => {
   const {
     body,
@@ -80,12 +83,25 @@ const fetchAssetFile = async (octokit: ReturnType<typeof github.getOctokit>, { i
       'User-Agent': userAgent
     }
   }
-  const response = await fetch(url, { body, headers, method })
-  if (!response.ok) throw new Error('Invalid response')
-  const blob = await response.blob()
-  const arrayBuffer = await blob.arrayBuffer()
-  await mkdir(dirname(outputPath), { recursive: true })
-  await writeFile(outputPath, new Uint8Array(arrayBuffer))
+  let i = 0
+  while (true) {
+    const response = await fetch(url, { body, headers, method })
+    if (!response.ok) {
+      if (i < MAX_RETRY) {
+        i++
+        await new Promise(resolve => setTimeout(resolve, RETRY_INTERVAL))
+        continue
+      } else {
+        const text = await response.text()
+        core.warning(text)
+        throw new Error('Invalid response')
+      }
+    }
+    const blob = await response.blob()
+    const arrayBuffer = await blob.arrayBuffer()
+    await mkdir(dirname(outputPath), { recursive: true })
+    await writeFile(outputPath, new Uint8Array(arrayBuffer))
+  }
 }
 
 const printOutput = (release: GetReleaseResult): void => {
