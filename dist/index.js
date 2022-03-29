@@ -1249,10 +1249,10 @@ Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
       command_1.issueCommand("error", utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
     }
     exports.error = error;
-    function warning(message, properties = {}) {
+    function warning2(message, properties = {}) {
       command_1.issueCommand("warning", utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
     }
-    exports.warning = warning;
+    exports.warning = warning2;
     function notice(message, properties = {}) {
       command_1.issueCommand("notice", utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
     }
@@ -12113,6 +12113,8 @@ var getRelease = (octokit, { owner, repo, version }) => {
     throw new Error("Malformed version");
   }
 };
+var MAX_RETRY = 5;
+var RETRY_INTERVAL = 1e3;
 var fetchAssetFile = async (octokit, { id, outputPath, owner, repo }) => {
   const {
     body,
@@ -12144,13 +12146,25 @@ var fetchAssetFile = async (octokit, { id, outputPath, owner, repo }) => {
       "User-Agent": userAgent
     };
   }
-  const response = await fetch(url, { body, headers, method });
-  if (!response.ok)
-    throw new Error("Invalid response");
-  const blob = await response.blob();
-  const arrayBuffer = await blob.arrayBuffer();
-  await (0, import_promises.mkdir)((0, import_path.dirname)(outputPath), { recursive: true });
-  await (0, import_promises.writeFile)(outputPath, new Uint8Array(arrayBuffer));
+  let i2 = 0;
+  while (true) {
+    const response = await fetch(url, { body, headers, method });
+    if (!response.ok) {
+      if (i2 < MAX_RETRY) {
+        i2++;
+        await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL));
+        continue;
+      } else {
+        const text = await response.text();
+        core.warning(text);
+        throw new Error("Invalid response");
+      }
+    }
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    await (0, import_promises.mkdir)((0, import_path.dirname)(outputPath), { recursive: true });
+    await (0, import_promises.writeFile)(outputPath, new Uint8Array(arrayBuffer));
+  }
 };
 var printOutput = (release) => {
   core.setOutput("version", release.data.tag_name);
