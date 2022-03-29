@@ -12115,12 +12115,11 @@ var getRelease = (octokit, { owner, repo, version }) => {
 };
 var MAX_RETRY = 5;
 var RETRY_INTERVAL = 1e3;
-var fetchAssetFile = async (octokit, { id, outputPath, owner, repo }) => {
+var fetchAssetFile = async (octokit, { id, outputPath, owner, repo, token }) => {
   const {
     body,
     headers: {
       accept,
-      authorization,
       "user-agent": userAgent
     },
     method,
@@ -12133,19 +12132,12 @@ var fetchAssetFile = async (octokit, { id, outputPath, owner, repo }) => {
     owner,
     repo
   });
-  let headers = { Accept: accept };
-  if (typeof authorization !== "undefined") {
-    headers = {
-      ...headers,
-      Authorization: authorization
-    };
-  }
-  if (typeof userAgent !== "undefined") {
-    headers = {
-      ...headers,
-      "User-Agent": userAgent
-    };
-  }
+  let headers = {
+    accept,
+    authorization: `bearer ${token}`
+  };
+  if (typeof userAgent !== "undefined")
+    headers = { ...headers, "user-agent": userAgent };
   let i2 = 0;
   while (true) {
     const response = await fetch(url, { body, headers, method });
@@ -12183,7 +12175,7 @@ var main = async () => {
   const asset = release.data.assets.find((e2) => e2.name === file);
   if (typeof asset === "undefined")
     throw new Error("Could not find asset id");
-  await fetchAssetFile(octokit, { id: asset.id, outputPath: target, owner, repo });
+  await fetchAssetFile(octokit, { id: asset.id, outputPath: target, owner, repo, token });
   printOutput(release);
 };
 var mainRegex = async () => {
@@ -12199,7 +12191,7 @@ var mainRegex = async () => {
   if (assets.length === 0)
     throw new Error("Could not find asset id");
   for (const asset of assets) {
-    await fetchAssetFile(octokit, { id: asset.id, outputPath: `${target}${asset.name}`, owner, repo });
+    await fetchAssetFile(octokit, { id: asset.id, outputPath: `${target}${asset.name}`, owner, repo, token });
   }
   printOutput(release);
 };
